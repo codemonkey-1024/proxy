@@ -1,32 +1,33 @@
-import os
-
-from flask import (Flask, redirect, render_template, request,
-                   send_from_directory, url_for)
+from flask import Flask, request, Response
+import requests
 
 app = Flask(__name__)
 
+TARGET_URL = "https://openai.com"
 
-@app.route('/')
-def index():
-   print('Request for index page received')
-   return render_template('index.html')
 
-@app.route('/favicon.ico')
-def favicon():
-    return send_from_directory(os.path.join(app.root_path, 'static'),
-                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def proxy(path):
+    # 构建目标 URL
+    url = f"{TARGET_URL}/{path}"
 
-@app.route('/hello', methods=['POST'])
-def hello():
-   name = request.form.get('name')
+    # 获取请求方法
+    method = request.method
 
-   if name:
-       print('Request for hello page received with name=%s' % name)
-       return render_template('hello.html', name = name)
-   else:
-       print('Request for hello page received with no name or blank name -- redirecting')
-       return redirect(url_for('index'))
+    # 获取请求头和数据
+    headers = {key: value for key, value in request.headers if key != 'Host'}
+    data = request.get_data()
+
+    # 发起请求
+    response = requests.request(method, url, headers=headers, data=data, params=request.args)
+
+    # 构建响应
+    excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+    headers = [(name, value) for (name, value) in response.raw.headers.items() if name.lower() not in excluded_headers]
+
+    return Response(response.content, response.status_code, headers)
 
 
 if __name__ == '__main__':
-   app.run()
+    app.run(host='0.0.0.0', port=5000)
